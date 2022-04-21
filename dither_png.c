@@ -6,8 +6,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <setjmp.h>
-
 #include <png.h>
 
 #define DEFAULT_OUTPUT_FILENAME "out.png"

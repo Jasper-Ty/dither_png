@@ -26,4 +26,4 @@ $(OBJDIR):
 .PHONY: clean
 
 clean: 
-	-rm -f $(OBJDIR)/*.o $(BINDIR)/* > /dev/null 
+	-rm -f $(OBJDIR)/*.o $(BINDIR)/* 1>/dev/null 2>&1

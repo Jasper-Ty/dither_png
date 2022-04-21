@@ -3,6 +3,10 @@
 dither_png is a command-line program that takes an input .png file and creates a new .png file that is a 1-bit (black and white) version of the original using dithering.
 
 
+<img src="img/santorini.png" alt="santorini original pic">
+
+<img src="img/santorini_dithered.png" alt="santorini original pic">
+
 ## Requirements
 
 A system with gcc and libpng

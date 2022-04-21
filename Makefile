@@ -9,7 +9,7 @@ CFLAGS=--std=c89
 dither_png: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIB) $(CFLAGS)
 
-.PHONE : clean
+.PHONY: clean
 
-clean : 
+clean: 
 	-rm -f $(OBJ) dither_png > /dev/null 

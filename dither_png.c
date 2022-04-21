@@ -6,9 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <setjmp.h>
-#include <string.h>
 
 #include <png.h>
 

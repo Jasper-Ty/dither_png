@@ -1,22 +1,27 @@
+TARGET=dither_png
+
 CC=gcc
 LIB=-lpng
 CFLAGS=--std=c89
 
 SRCDIR=src
-OBJ=dither_png.o
 OBJDIR=obj
-BIN=dither_png
 BINDIR=bin
 
-vpath %.c src
-vpath %.h src
-vpath %.o obj
+SRC=$(wildcard $(SRCDIR)/*.c)
+OBJ=$(SRC:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
 
-$(OBJDIR)/%.o: %.c
-	$(CC) -c -o $@ $< $(LIB) $(CFLAGS)
+$(BINDIR)/$(TARGET): $(BINDIR) $(OBJDIR) $(OBJ)
+	$(CC) -o $@ $(OBJ) $(LIB) $(CFLAGS)
 
-$(BINDIR)/$(BIN): $(OBJDIR)/$(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS) $(LIB) $(CFLAGS)
+$(OBJ): $(OBJDIR)/%.o : $(SRCDIR)/%.c
+	$(CC) -c $< -o $@ $(LIB) $(CFLAGS)
+
+$(BINDIR):
+	mkdir $(BINDIR)
+
+$(OBJDIR):
+	mkdir $(OBJDIR)
 
 .PHONY: clean
 

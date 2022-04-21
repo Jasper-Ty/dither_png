@@ -1,14 +1,20 @@
-#define _GNU_SOURCE
+/*
+ * dither_png.c
+ *
+ * Program that takes .PNG files and creates a dithered .PNG file output
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <errno.h>
 #include <setjmp.h>
 #include <string.h>
 
 #include <png.h>
 
 #define DEFAULT_OUTPUT_FILENAME "out.png"
+
+
 
 /* SETUP/TEARDOWN FUNCTIONS --------------------------------------------------------  
  *

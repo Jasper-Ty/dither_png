@@ -18,7 +18,7 @@ Install [libpng](http://www.libpng.org/pub/png/libpng.html), then run
 $ make
 ```
 
-This will build dither_png into ```bin/dither_png```
+This will build dither_png at ```bin/dither_png```
 
 ## Usage
 

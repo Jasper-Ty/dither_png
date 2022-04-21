@@ -12,7 +12,7 @@
 
 
 
-/* SETUP/TEARDOWN FUNCTIONS --------------------------------------------------------  
+/* SETUP/TEARDOWN FUNCTIONS
  *
  * {setup/teardown}_{read/write}:
  *     Initializes/destroys LibPNG structs and data
@@ -121,7 +121,7 @@ void teardown_write (FILE *fp,
 }
 
 
-/* PNG CONFIG FUNCTIONS --------------------------------------------------------  
+/* PNG CONFIG FUNCTIONS 
  *
  * set_to_grayscale:
  *     Sets PNG to 8-bit grayscale
@@ -168,7 +168,7 @@ void copy_IHDR (png_structp in_pngp, png_infop in_infop,
                   filter_method);
 }
 
-/* IMAGE DATA FUNCTIONS --------------------------------------------------------  
+/* IMAGE DATA FUNCTIONS
  *
  * load_rows:
  *     Allocates and returns 2D byte array populated with PNG image data

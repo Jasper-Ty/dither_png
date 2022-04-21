@@ -1,15 +1,24 @@
 CC=gcc
-OBJ=dither_png.o
 LIB=-lpng
 CFLAGS=--std=c89
 
-%.o: %.c
+SRCDIR=src
+OBJ=dither_png.o
+OBJDIR=obj
+BIN=dither_png
+BINDIR=bin
+
+vpath %.c src
+vpath %.h src
+vpath %.o obj
+
+$(OBJDIR)/%.o: %.c
 	$(CC) -c -o $@ $< $(LIB) $(CFLAGS)
 
-dither_png: $(OBJ)
+$(BINDIR)/$(BIN): $(OBJDIR)/$(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIB) $(CFLAGS)
 
 .PHONY: clean
 
 clean: 
-	-rm -f $(OBJ) dither_png > /dev/null 
+	-rm -f $(OBJDIR)/*.o $(BINDIR)/* > /dev/null 

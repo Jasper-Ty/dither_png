@@ -220,7 +220,7 @@ void dither_1bit (png_bytep *row_ptrs,
 {
     /* Abort if not 2-channel (Grayscale/Alpha) */
     size_t dx = png_get_channels (png_ptr, info_ptr);
-    if (dx != 2) return;
+    if (dx > 2) return;
 
     /* Get dimensions */
     size_t width = dx * ( (size_t) png_get_image_width (png_ptr, info_ptr) );

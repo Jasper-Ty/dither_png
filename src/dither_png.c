@@ -214,9 +214,9 @@ void commit_rows_to_png (png_bytep *row_ptrs,
 }
 
 /* Floyd-Steinberg dithering implementation */ 
-void dither_1bit (png_bytep *row_ptrs, 
-                  png_structp png_ptr,
-                  png_infop info_ptr)
+void dither_1bit_floyd_steinberg (png_bytep *row_ptrs, 
+                                  png_structp png_ptr,
+                                  png_infop info_ptr)
 {
     /* Abort if not 2-channel (Grayscale/Alpha) */
     size_t dx = png_get_channels (png_ptr, info_ptr);
@@ -234,13 +234,50 @@ void dither_1bit (png_bytep *row_ptrs,
             png_byte old = row_ptrs[y][x];
             row_ptrs[y][x] = 255 * (old < 128);
             png_byte err = old - row_ptrs[y][x];
-            if (x<width-dx              ) row_ptrs[y  ][x+dx] += (png_byte) ((7*err)/16.0);
-            if (x>0        && y<height-1) row_ptrs[y+1][x-dx] += (png_byte) ((3*err)/16.0);
-            if (              y<height-1) row_ptrs[y+1][x   ] += (png_byte) ((5*err)/16.0);
-            if (x<width-dx && y<height-1) row_ptrs[y+1][x+dx] += (png_byte) ((1*err)/16.0);
+            if (x<width-dx              ) row_ptrs[y  ][x+dx] += ((7*err)/16.0);
+            if (x>0        && y<height-1) row_ptrs[y+1][x-dx] += ((3*err)/16.0);
+            if (              y<height-1) row_ptrs[y+1][x   ] += ((5*err)/16.0);
+            if (x<width-dx && y<height-1) row_ptrs[y+1][x+dx] += ((1*err)/16.0);
         }
     }
 }
+
+/* Bayer matrix */
+#define ORDER_COEFF 4
+unsigned char order_matrix[] = 
+{
+     0, 32,  8, 40,  2, 34, 10, 42,
+    48, 16, 56, 24, 50, 18, 58, 26,
+    12, 44,  4, 36, 14, 46,  6, 38,
+    60, 28, 52, 20, 62, 30, 54, 22,
+     3, 35, 11, 43,  1, 33,  9, 41,
+    51, 19, 59, 27, 49, 17, 57, 25,
+    15, 47,  7, 39, 13, 45,  4, 37,
+    63, 31, 55, 23, 61, 29, 53, 21
+};
+
+/* Ordered dithering implementation */ 
+void dither_1bit_ordered (png_bytep *row_ptrs, 
+                          png_structp png_ptr,
+                          png_infop info_ptr)
+{
+    /* Abort if not 2-channel (Grayscale/Alpha) */
+    size_t dx = png_get_channels (png_ptr, info_ptr);
+    if (dx > 2) return;
+
+    /* Get dimensions */
+    size_t width = dx * ( (size_t) png_get_image_width (png_ptr, info_ptr) );
+    size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
+
+    size_t x, y;
+    printf("%ld, %ld\n", width, height);
+    for (y = 0; y < height; y++)
+        for (x = 0; x < width; x += dx){
+            row_ptrs[y][x] = (row_ptrs[y][x] > 4*order_matrix[(y%8)*8 + (x%(8*dx))]);
+            row_ptrs[y][x] *= 255;
+        }
+}
+
 
 /* main
  * 
@@ -298,7 +335,8 @@ int main (int argc,
         teardown_write (img_write, &out_pngp, &out_infop);
         exit(EXIT_FAILURE);
     }
-    dither_1bit (row_ptrs, in_pngp, in_infop); 
+    /* dither_1bit_floyd_steinberg (row_ptrs, in_pngp, in_infop); */
+    dither_1bit_ordered(row_ptrs, in_pngp, in_infop);
     /* -------------------------------------------------------------------*/
 
 

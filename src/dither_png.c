@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <png.h>
 
+#include "parse.h"
 #define DEFAULT_OUTPUT_FILENAME "out.png"
 
 
@@ -270,7 +271,6 @@ void dither_1bit_ordered (png_bytep *row_ptrs,
     size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
 
     size_t x, y;
-    printf("%ld, %ld\n", width, height);
     for (y = 0; y < height; y++)
         for (x = 0; x < width; x += dx){
             row_ptrs[y][x] = (row_ptrs[y][x] > 4*order_matrix[(y%8)*8 + (x%(8*dx))]);
@@ -286,11 +286,14 @@ void dither_1bit_ordered (png_bytep *row_ptrs,
 int main (int argc, 
           char **argv)
 {
+    Options opts;
+    parse_options (&argc, &argv, opts);
 
 /* Print usage -----------------------------------------------------------*/
     if (argc <= 1)
     {
-        printf("Usage: %s <file> [output_filename]\n", argv[0]);
+        printf("Usage: %s <file> [output_filename] [-f]\n", argv[0]);
+        printf("    -f: Use Floyd-Steinberg dithering algorithm\n");
         exit(EXIT_SUCCESS);
     }
     /* -------------------------------------------------------------------*/
@@ -335,8 +338,11 @@ int main (int argc,
         teardown_write (img_write, &out_pngp, &out_infop);
         exit(EXIT_FAILURE);
     }
-    /* dither_1bit_floyd_steinberg (row_ptrs, in_pngp, in_infop); */
-    dither_1bit_ordered(row_ptrs, in_pngp, in_infop);
+    if (opts['f']) {
+        dither_1bit_floyd_steinberg (row_ptrs, in_pngp, in_infop);
+    } else {
+        dither_1bit_ordered (row_ptrs, in_pngp, in_infop);
+    }
     /* -------------------------------------------------------------------*/
 
 

@@ -220,7 +220,7 @@ void dither_1bit (png_bytep *row_ptrs,
 {
     /* Abort if not 2-channel (Grayscale/Alpha) */
     size_t dx = png_get_channels (png_ptr, info_ptr);
-    if (dx != 2) return;
+    if (dx > 2) return;
 
     /* Get dimensions */
     size_t width = dx * ( (size_t) png_get_image_width (png_ptr, info_ptr) );
@@ -234,10 +234,10 @@ void dither_1bit (png_bytep *row_ptrs,
             png_byte old = row_ptrs[y][x];
             row_ptrs[y][x] = 255 * (old < 128);
             png_byte err = old - row_ptrs[y][x];
-            if (x<width-dx              ) row_ptrs[y  ][x+dx] += (png_byte) ((7*err)/16.0);
-            if (x>0        && y<height-1) row_ptrs[y+1][x-dx] += (png_byte) ((3*err)/16.0);
-            if (              y<height-1) row_ptrs[y+1][x   ] += (png_byte) ((5*err)/16.0);
-            if (x<width-dx && y<height-1) row_ptrs[y+1][x+dx] += (png_byte) ((1*err)/16.0);
+            if (x<width-dx              ) row_ptrs[y  ][x+dx] += (png_byte) ((7.0*err)/16.0);
+            if (x>0        && y<height-1) row_ptrs[y+1][x-dx] += (png_byte) ((3.0*err)/16.0);
+            if (              y<height-1) row_ptrs[y+1][x   ] += (png_byte) ((5.0*err)/16.0);
+            if (x<width-dx && y<height-1) row_ptrs[y+1][x+dx] += (png_byte) ((1.0*err)/16.0);
         }
     }
 }
@@ -298,7 +298,9 @@ int main (int argc,
         teardown_write (img_write, &out_pngp, &out_infop);
         exit(EXIT_FAILURE);
     }
+    printf("undithered\n");
     dither_1bit (row_ptrs, in_pngp, in_infop); 
+    printf("dithered\n");
     /* -------------------------------------------------------------------*/
 
 

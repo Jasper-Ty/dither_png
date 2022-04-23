@@ -34,3 +34,8 @@ $ dither_png cats.png dogs.png
 ```
 will save the output to ```dogs.png```
 
+By default, dither_png uses ordered dithering. To use, alternatively, Floyd-Steinberg dithering, use ```-f```
+```
+$ dither_png -f cats.png
+```
+

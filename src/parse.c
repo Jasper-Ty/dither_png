@@ -20,6 +20,7 @@ void parse_options (int *argc, char ***argv, Options opts)
     }
 }
 
+
 void print_args (int argc, char **argv)
 {
     for (;argc; argc--, argv++)

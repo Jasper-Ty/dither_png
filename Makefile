@@ -7,7 +7,7 @@ BINDIR=bin
 
 CC=gcc
 LIB=-lpng
-CFLAGS=--std=c89 -I./$(INCDIR)
+CFLAGS=-g --std=c89 -I./$(INCDIR)
 
 SRC=$(wildcard $(SRCDIR)/*.c)
 OBJ=$(SRC:$(SRCDIR)/%.c=$(OBJDIR)/%.o)

@@ -11,8 +11,6 @@
 #include "parse.h"
 #define DEFAULT_OUTPUT_FILENAME "out.png"
 
-
-
 /* SETUP/TEARDOWN FUNCTIONS
  *
  * {setup/teardown}_{read/write}:
@@ -132,13 +130,7 @@ void teardown_write (FILE *fp,
 void set_to_grayscale (png_structp png_ptr,
                        png_infop info_ptr)
 {
-    png_uint_32 width, height;
-    int bit_depth, color_type;
-    png_get_IHDR (png_ptr, info_ptr, 
-                  &width, &height, 
-                  &bit_depth, 
-                  &color_type, 
-                  NULL, NULL, NULL); 
+    png_byte color_type = png_get_color_type (png_ptr, info_ptr);
 
     if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_RGB_ALPHA)
         png_set_rgb_to_gray_fixed (png_ptr, 1, -1, -1);
@@ -206,12 +198,26 @@ png_bytep *load_rows (png_structp png_ptr,
     return row_ptrs;
 }
 
+
 void commit_rows_to_png (png_bytep *row_ptrs,
                          png_structp png_ptr,
                          png_infop info_ptr)
 {
     png_set_rows (png_ptr, info_ptr, row_ptrs);
     png_write_png (png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
+}
+
+void free_rows (png_bytep *row_ptrs,
+                png_structp png_ptr,
+                png_infop info_ptr)
+{
+    size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
+    size_t y;
+    for (y = 0; y < height; y++)
+    {
+        free(row_ptrs[y]);
+    }
+    free(row_ptrs);
 }
 
 /* Floyd-Steinberg dithering implementation */ 
@@ -224,26 +230,48 @@ void dither_1bit_floyd_steinberg (png_bytep *row_ptrs,
     if (dx > 2) return;
 
     /* Get dimensions */
-    size_t width = dx * ( (size_t) png_get_image_width (png_ptr, info_ptr) );
+    size_t width = (size_t) png_get_image_width (png_ptr, info_ptr);
     size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
+
+    int *T = malloc (width*height*sizeof(int));
+    if (!T)
+    {
+        perror ("malloc");
+        return;
+    }
 
     size_t x, y;
     for (y = 0; y < height; y++)
     {
-        for (x = 0; x < width; x += dx)
+        for (x = 0; x < width; x++)
         {
-            png_byte old = row_ptrs[y][x];
-            row_ptrs[y][x] = 255 * (old < 128);
-            png_byte err = old - row_ptrs[y][x];
-            if (x<width-dx              ) row_ptrs[y  ][x+dx] += ((7*err)/16.0);
-            if (x>0        && y<height-1) row_ptrs[y+1][x-dx] += ((3*err)/16.0);
-            if (              y<height-1) row_ptrs[y+1][x   ] += ((5*err)/16.0);
-            if (x<width-dx && y<height-1) row_ptrs[y+1][x+dx] += ((1*err)/16.0);
+            T[y*width+x] = (int) row_ptrs[y][x*dx];
         }
     }
+
+    for (y = 0; y < height; y++)
+    {
+        for (x = 0; x < width; x++)
+        {
+            int val = T[y*width + x] > 128;
+            int err = T[y*width + x] - 255*val;
+            T[y*width + x] = 255*val;
+
+            if (x<width-1              ) T[(y  )*width+(x+1)] += err * (7.0/16.0); 
+            if (x>0       && y<height-1) T[(y+1)*width+(x-1)] += err * (3.0/16.0); 
+            if (             y<height-1) T[(y+1)*width+(x  )] += err * (5.0/16.0); 
+            if (x<width-1 && y<height-1) T[(y+1)*width+(x+1)] += err * (1.0/16.0); 
+        }
+    }
+
+    for (y = 0; y < height; y++) 
+        for (x = 0; x < width; x++) 
+            row_ptrs[y][x*dx] = (png_byte) T[y*width+x];
+
+    free (T);
 }
 
-/* Bayer matrix */
+/* Threshold matrix */
 #define ORDER_COEFF 4
 unsigned char order_matrix[] = 
 {
@@ -349,7 +377,7 @@ int main (int argc,
 /* Finalize: save PNG and free structs -----------------------------------*/
     commit_rows_to_png (row_ptrs, out_pngp, out_infop);
 
-    free (row_ptrs);
+    free_rows(row_ptrs, out_pngp, out_infop);
     teardown_read (img_read, &in_pngp, &in_infop, &in_endp);
     teardown_write (img_write, &out_pngp, &out_infop);
     /* -------------------------------------------------------------------*/

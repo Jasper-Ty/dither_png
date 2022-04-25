@@ -3,20 +3,20 @@
  *
  * Program that takes .PNG files and creates a dithered .PNG file output
  */
+#define DEFAULT_OUTPUT_FILENAME "out.png"
 
 #include <stdio.h>  /* printf(), fprintf(), perror(), 
                        FILE*, fopen(), fclose(), fread() */
 #include <stdlib.h> /* malloc(), free(),
                        exit(), EXIT_SUCCESS, EXIT_FAILURE */
+#include <png.h>    /* png_* */
 
-#include <png.h>   
-#include "parse.h" 
+#include "parse.h"  /* Options, parse_options() */
 
-#define DEFAULT_OUTPUT_FILENAME "out.png"
 
 /* SETUP/TEARDOWN FUNCTIONS
  *
- * {setup/teardown}_{read/write}:
+ * {setup/teardown}_{read/write}
  *     Initializes/destroys LibPNG structs and data
  *     for the input(read)/output(write) PNG file
  *******************************************************************************/
@@ -173,72 +173,75 @@ void copy_IHDR (png_structp in_pngp, png_infop in_infop,
 
 /* IMAGE DATA FUNCTIONS
  *
- * load_rows:
+ * load_idat
  *     Allocates and returns 2D byte array populated with PNG image data
- * commit_rows_to_png:
+ * free_idat
+ *     Frees image data array allocated with load_idat
+ * commit_idat_to_png
  *     Sets PNG image data and commits it to PNG file
- * dither_1bit:
- *     Converts 8-bit grayscale image data to 1-bit black and white image data
  *******************************************************************************/
 
-png_bytep *load_rows (png_structp png_ptr,
+png_bytep *load_idat (png_structp png_ptr,
                       png_infop info_ptr)
 {
 /* Get dimensions for allocating  --------------------------------------- */
-    png_uint_32 img_height = png_get_image_height (png_ptr, info_ptr);
+    png_uint_32 height = png_get_image_height (png_ptr, info_ptr);
     png_uint_32 rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+    /* ------------------------------------------------------------------ */
 
 /* Allocate row pointers and rows --------------------------------------- */
-    png_bytep *row_ptrs = malloc(img_height * sizeof(*row_ptrs));
-    if (!row_ptrs)
-        return fprintf(stderr, "malloc failed()!"), NULL;
-    size_t row;
-    for (row = 0; row < img_height; row++) {
-        row_ptrs[row] = malloc(rowbytes * sizeof(**row_ptrs));
-        if (!(row_ptrs[row])) 
-            return fprintf(stderr, "malloc failed()!"), NULL;
-    }
+    png_bytep *idat = malloc (height * sizeof(*idat));
+    idat[0] = malloc (rowbytes*height * sizeof(**idat));
+
+    size_t idx;
+    for (idx = 0; idx < height; idx++) 
+        idat[idx] = idat[0] + idx*rowbytes;
+    /* ------------------------------------------------------------------ */
 
 /* Read in png, then done! ---------------------------------------------- */
-    png_read_image (png_ptr, row_ptrs);
-    return row_ptrs;
+    png_read_image (png_ptr, idat);
+    return idat;
+    /* ------------------------------------------------------------------ */
 }
 
+void free_idat (png_bytep *idat)
+{
+    free (idat[0]);
+    free (idat);
+}
 
-void commit_rows_to_png (png_bytep *row_ptrs,
+void commit_idat_to_png (png_bytep *idat,
                          png_structp png_ptr,
                          png_infop info_ptr)
 {
-    png_set_rows (png_ptr, info_ptr, row_ptrs);
+    png_set_rows (png_ptr, info_ptr, idat);
     png_write_png (png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
 }
 
-void free_rows (png_bytep *row_ptrs,
-                png_structp png_ptr,
-                png_infop info_ptr)
-{
-    size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
-    size_t y;
-    for (y = 0; y < height; y++)
-        free(row_ptrs[y]);
+/* DITHERING FUNCTIONS
+ *
+ * dither_floyd_steinberg 
+ *     Dithers using an error diffusion algorithm 
+ * dither_ordered
+ *     Dithers using a threshold matrix
+ *******************************************************************************/
 
-    free(row_ptrs);
-}
-
-/* Floyd-Steinberg dithering implementation */ 
-void dither_1bit_floyd_steinberg (png_bytep *row_ptrs, 
-                                  png_structp png_ptr,
-                                  png_infop info_ptr)
+/* Floyd-Steinberg dithering implementation */
+void dither_floyd_steinberg (png_bytep *idat, 
+                             png_structp png_ptr,
+                             png_infop info_ptr)
 {
     size_t x, y;
 
 /* Abort if not grayscale image data! ----------------------------------- */
     size_t dx = png_get_channels (png_ptr, info_ptr);
     if (dx > 2) return; /* 2-channel: Grayscale/Alpha, 1-channel: Grayscale */
+    /* ------------------------------------------------------------------ */
 
 /* Get dimensions ------------------------------------------------------- */
     size_t width = (size_t) png_get_image_width (png_ptr, info_ptr);
     size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
+    /* ------------------------------------------------------------------ */
 
 /* Create temp array for performing calculations (avoid overflow errs) -- */
     int *T = malloc (width*height*sizeof(int));
@@ -248,7 +251,8 @@ void dither_1bit_floyd_steinberg (png_bytep *row_ptrs,
     }
     for (y = 0; y < height; y++)
         for (x = 0; x < width; x++)
-            T[y*width+x] = (int) row_ptrs[y][x*dx];
+            T[y*width+x] = (int) idat[y][x*dx];
+    /* ------------------------------------------------------------------ */
 
 /* Perform dithering algorithm ------------------------------------------ */
     for (y = 0; y < height; y++) {
@@ -268,8 +272,9 @@ void dither_1bit_floyd_steinberg (png_bytep *row_ptrs,
 /* Commit temp array data to row_ptrs ----------------------------------- */
     for (y = 0; y < height; y++) 
         for (x = 0; x < width; x++) 
-            row_ptrs[y][x*dx] = (png_byte) T[y*width+x];
+            idat[y][x*dx] = (png_byte) T[y*width+x];
     free (T);
+    /* ------------------------------------------------------------------ */
 }
 
 /* Threshold matrix */
@@ -287,24 +292,27 @@ unsigned char order_matrix[] =
 };
 
 /* Ordered dithering implementation */ 
-void dither_1bit_ordered (png_bytep *row_ptrs, 
-                          png_structp png_ptr,
-                          png_infop info_ptr)
+void dither_ordered (png_bytep *idat, 
+                     png_structp png_ptr,
+                     png_infop info_ptr)
 {
     size_t x, y;
 
 /* Abort if not grayscale image data! ----------------------------------- */
     size_t dx = png_get_channels (png_ptr, info_ptr);
     if (dx > 2) return; /* 2-channel: Grayscale/Alpha, 1-channel: Grayscale */
+    /* ------------------------------------------------------------------ */
 
 /* Get dimensions ------------------------------------------------------- */
     size_t width = dx * ( (size_t) png_get_image_width (png_ptr, info_ptr) );
     size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
+    /* ------------------------------------------------------------------ */
 
 /* Perform dithering algorithm ------------------------------------------ */
     for (y = 0; y < height; y++)
         for (x = 0; x < width; x += dx)
-            row_ptrs[y][x] = 255*(row_ptrs[y][x] > ORDER_COEFF*order_matrix[(y%8)*8+(x%(8*dx))]);
+            idat[y][x] = 255*(idat[y][x] > ORDER_COEFF*order_matrix[(y%8)*8+(x%(8*dx))]);
+    /* ------------------------------------------------------------------ */
 }
 
 
@@ -362,25 +370,25 @@ int main (int argc,
 
 
 /* Load image data and perform dither ------------------------------------*/
-    png_bytep *row_ptrs = load_rows (in_pngp, in_infop);
-    if (!row_ptrs) {
+    png_bytep *idat = load_idat (in_pngp, in_infop);
+    if (!idat) {
         fprintf (stderr, "Unable to read image data\n");
         teardown_read (img_read, &in_pngp, &in_infop, &in_endp);
         teardown_write (img_write, &out_pngp, &out_infop);
         exit(EXIT_FAILURE);
     }
     if (opts['f']) {
-        dither_1bit_floyd_steinberg (row_ptrs, in_pngp, in_infop);
+        dither_floyd_steinberg (idat, in_pngp, in_infop);
     } else {
-        dither_1bit_ordered (row_ptrs, in_pngp, in_infop);
+        dither_ordered (idat, in_pngp, in_infop);
     }
     /* -------------------------------------------------------------------*/
 
 
 /* Finalize: save PNG and free structs -----------------------------------*/
-    commit_rows_to_png (row_ptrs, out_pngp, out_infop);
+    commit_idat_to_png (idat, out_pngp, out_infop);
 
-    free_rows(row_ptrs, out_pngp, out_infop);
+    free_idat(idat);
     teardown_read (img_read, &in_pngp, &in_infop, &in_endp);
     teardown_write (img_write, &out_pngp, &out_infop);
     /* -------------------------------------------------------------------*/

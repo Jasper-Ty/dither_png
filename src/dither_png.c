@@ -4,11 +4,14 @@
  * Program that takes .PNG files and creates a dithered .PNG file output
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <png.h>
+#include <stdio.h>  /* printf(), fprintf(), perror(), 
+                       FILE*, fopen(), fclose(), fread() */
+#include <stdlib.h> /* malloc(), free(),
+                       exit(), EXIT_SUCCESS, EXIT_FAILURE */
 
-#include "parse.h"
+#include <png.h>   
+#include "parse.h" 
+
 #define DEFAULT_OUTPUT_FILENAME "out.png"
 
 /* SETUP/TEARDOWN FUNCTIONS
@@ -23,6 +26,8 @@ void setup_read (FILE *fp,
                  png_infop *info_ptr,
                  png_infop *end_info)
 {
+
+/* Check first 8 bytes to see if file is PNG ---------------------------- */
     int SIG_BYTES = 8;
     char header[SIG_BYTES];
 
@@ -32,41 +37,44 @@ void setup_read (FILE *fp,
         fprintf(stderr, "Not a PNG\n");
         exit(EXIT_FAILURE);
     }
+    /* ------------------------------------------------------------------ */
 
+/* Create read, info, and end structs ----------------------------------- */ 
     *png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!(*png_ptr)) 
-    {
+    if (!(*png_ptr)) {
         fprintf(stderr, "png_create_read_struct() error\n");
         exit(EXIT_FAILURE);
     }
 
     *info_ptr = png_create_info_struct(*png_ptr);
-    if (!(*info_ptr))
-    {
+    if (!(*info_ptr)) {
         fprintf(stderr, "png_create_info_struct() error\n");
         png_destroy_read_struct (png_ptr, NULL, NULL);
         exit(EXIT_FAILURE);
     }
 
     *end_info = png_create_info_struct(*png_ptr);
-    if (!(*end_info))
-    {
+    if (!(*end_info)) {
         fprintf(stderr, "png_create_info_struct() error\n");
         png_destroy_read_struct (png_ptr, info_ptr, NULL);
         exit(EXIT_FAILURE);
     }
+    /* ------------------------------------------------------------------ */
 
-    if (setjmp(png_jmpbuf(*png_ptr)))
-    {
+/* setjmp for error handling -------------------------------------------- */
+    if (setjmp(png_jmpbuf(*png_ptr))) {
         png_destroy_read_struct (png_ptr, info_ptr, end_info);
         fclose (fp);
         exit(EXIT_FAILURE);
     }
+    /* ------------------------------------------------------------------ */
     
+/* Open PNG file and read PNG info -------------------------------------- */
     png_init_io (*png_ptr, fp);
     png_set_sig_bytes (*png_ptr, SIG_BYTES);
 
     png_read_info (*png_ptr, *info_ptr);
+    /* ------------------------------------------------------------------ */
 }
 
 void teardown_read (FILE *fp,
@@ -86,24 +94,27 @@ void setup_write (FILE *fp,
                   png_structp *png_ptr,
                   png_infop *info_ptr)
 {
+/* Create read and info structs ----------------------------------------- */
     *png_ptr = png_create_write_struct (PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
     if (!png_ptr) {
         fprintf(stderr, "png_create_write_struct() error\n");
         exit(EXIT_FAILURE);
     }
-    
     *info_ptr = png_create_info_struct (*png_ptr);
     if (!(*info_ptr)) {
         fprintf(stderr, "png_create_info_struct() error\n");
         png_destroy_write_struct (png_ptr, NULL);
         exit(EXIT_FAILURE);
     }
+    /* ------------------------------------------------------------------ */
 
+/* setjmp for error handling -------------------------------------------- */
     if (setjmp(png_jmpbuf(*png_ptr))) {
         png_destroy_write_struct (png_ptr, info_ptr);
         fclose(fp);
         exit(EXIT_FAILURE);
     }
+    /* ------------------------------------------------------------------ */
 
     png_init_io (*png_ptr, fp);
 }
@@ -127,11 +138,11 @@ void teardown_write (FILE *fp,
  * copy_IHDR:
  *     Copies IHDR data between two PNG files
  *******************************************************************************/
+
 void set_to_grayscale (png_structp png_ptr,
                        png_infop info_ptr)
 {
     png_byte color_type = png_get_color_type (png_ptr, info_ptr);
-
     if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_RGB_ALPHA)
         png_set_rgb_to_gray_fixed (png_ptr, 1, -1, -1);
     png_read_update_info (png_ptr, info_ptr);
@@ -151,7 +162,6 @@ void copy_IHDR (png_structp in_pngp, png_infop in_infop,
                   &interlace_type, 
                   &compression_type, 
                   &filter_method); 
-
     png_set_IHDR (out_pngp, out_infop,
                   width, height,
                   bit_depth,
@@ -174,16 +184,14 @@ void copy_IHDR (png_structp in_pngp, png_infop in_infop,
 png_bytep *load_rows (png_structp png_ptr,
                       png_infop info_ptr)
 {
-    /* Get dimensions */
+/* Get dimensions for allocating  --------------------------------------- */
     png_uint_32 img_height = png_get_image_height (png_ptr, info_ptr);
     png_uint_32 rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 
-    /* Allocate row pointers */
+/* Allocate row pointers and rows --------------------------------------- */
     png_bytep *row_ptrs = malloc(img_height * sizeof(*row_ptrs));
     if (!row_ptrs)
         return fprintf(stderr, "malloc failed()!"), NULL;
-
-    /* Allocate each row */
     size_t row;
     for (row = 0; row < img_height; row++) {
         row_ptrs[row] = malloc(rowbytes * sizeof(**row_ptrs));
@@ -191,10 +199,8 @@ png_bytep *load_rows (png_structp png_ptr,
             return fprintf(stderr, "malloc failed()!"), NULL;
     }
 
-    /* Read the image data */
+/* Read in png, then done! ---------------------------------------------- */
     png_read_image (png_ptr, row_ptrs);
-
-    /* DONE */
     return row_ptrs;
 }
 
@@ -214,9 +220,8 @@ void free_rows (png_bytep *row_ptrs,
     size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
     size_t y;
     for (y = 0; y < height; y++)
-    {
         free(row_ptrs[y]);
-    }
+
     free(row_ptrs);
 }
 
@@ -225,34 +230,29 @@ void dither_1bit_floyd_steinberg (png_bytep *row_ptrs,
                                   png_structp png_ptr,
                                   png_infop info_ptr)
 {
-    /* Abort if not 2-channel (Grayscale/Alpha) */
-    size_t dx = png_get_channels (png_ptr, info_ptr);
-    if (dx > 2) return;
+    size_t x, y;
 
-    /* Get dimensions */
+/* Abort if not grayscale image data! ----------------------------------- */
+    size_t dx = png_get_channels (png_ptr, info_ptr);
+    if (dx > 2) return; /* 2-channel: Grayscale/Alpha, 1-channel: Grayscale */
+
+/* Get dimensions ------------------------------------------------------- */
     size_t width = (size_t) png_get_image_width (png_ptr, info_ptr);
     size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
 
+/* Create temp array for performing calculations (avoid overflow errs) -- */
     int *T = malloc (width*height*sizeof(int));
-    if (!T)
-    {
+    if (!T) {
         perror ("malloc");
         return;
     }
-
-    size_t x, y;
     for (y = 0; y < height; y++)
-    {
         for (x = 0; x < width; x++)
-        {
             T[y*width+x] = (int) row_ptrs[y][x*dx];
-        }
-    }
 
-    for (y = 0; y < height; y++)
-    {
-        for (x = 0; x < width; x++)
-        {
+/* Perform dithering algorithm ------------------------------------------ */
+    for (y = 0; y < height; y++) {
+        for (x = 0; x < width; x++) {
             int val = T[y*width + x] > 128;
             int err = T[y*width + x] - 255*val;
             T[y*width + x] = 255*val;
@@ -263,11 +263,12 @@ void dither_1bit_floyd_steinberg (png_bytep *row_ptrs,
             if (x<width-1 && y<height-1) T[(y+1)*width+(x+1)] += err * (1.0/16.0); 
         }
     }
+    /* ------------------------------------------------------------------ */
 
+/* Commit temp array data to row_ptrs ----------------------------------- */
     for (y = 0; y < height; y++) 
         for (x = 0; x < width; x++) 
             row_ptrs[y][x*dx] = (png_byte) T[y*width+x];
-
     free (T);
 }
 
@@ -290,26 +291,28 @@ void dither_1bit_ordered (png_bytep *row_ptrs,
                           png_structp png_ptr,
                           png_infop info_ptr)
 {
-    /* Abort if not 2-channel (Grayscale/Alpha) */
-    size_t dx = png_get_channels (png_ptr, info_ptr);
-    if (dx > 2) return;
+    size_t x, y;
 
-    /* Get dimensions */
+/* Abort if not grayscale image data! ----------------------------------- */
+    size_t dx = png_get_channels (png_ptr, info_ptr);
+    if (dx > 2) return; /* 2-channel: Grayscale/Alpha, 1-channel: Grayscale */
+
+/* Get dimensions ------------------------------------------------------- */
     size_t width = dx * ( (size_t) png_get_image_width (png_ptr, info_ptr) );
     size_t height = (size_t) png_get_image_height (png_ptr, info_ptr);
 
-    size_t x, y;
+/* Perform dithering algorithm ------------------------------------------ */
     for (y = 0; y < height; y++)
-        for (x = 0; x < width; x += dx){
-            row_ptrs[y][x] = (row_ptrs[y][x] > 4*order_matrix[(y%8)*8 + (x%(8*dx))]);
-            row_ptrs[y][x] *= 255;
-        }
+        for (x = 0; x < width; x += dx)
+            row_ptrs[y][x] = 255*(row_ptrs[y][x] > ORDER_COEFF*order_matrix[(y%8)*8+(x%(8*dx))]);
 }
 
 
 /* main
  * 
- * LET'S GOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+ * Loads PNG image and converts to grayscale, then uses
+ * the grayscale image data to perform 1-bit dithering. 
+ * The image data is then committed to an output PNG image
  *******************************************************************************/
 int main (int argc, 
           char **argv)

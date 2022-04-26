@@ -277,25 +277,34 @@ void dither_floyd_steinberg (png_bytep *idat,
     /* ------------------------------------------------------------------ */
 }
 
-/* Threshold matrix */
-#define ORDER_COEFF 4
-unsigned char order_matrix[] = 
+
+int *generate_order_matrix (size_t order)
 {
-     0, 32,  8, 40,  2, 34, 10, 42,
-    48, 16, 56, 24, 50, 18, 58, 26,
-    12, 44,  4, 36, 14, 46,  6, 38,
-    60, 28, 52, 20, 62, 30, 54, 22,
-     3, 35, 11, 43,  1, 33,  9, 41,
-    51, 19, 59, 27, 49, 17, 57, 25,
-    15, 47,  7, 39, 13, 45,  4, 37,
-    63, 31, 55, 23, 61, 29, 53, 21
-};
+    size_t dim = 1 << order;
+    int *matrix = malloc (dim*dim*sizeof(*matrix));
+
+    size_t x, y, bit;
+    for (y = 0; y < dim; y++) {
+        for (x = 0; x < dim; x++) {
+            unsigned char v = 0, mask = order-1, xc = x^y, yc = y;
+            for (bit = 0; bit < 2*order; mask--) {
+                v |= ((yc >> mask)&1) << bit++;
+                v |= ((xc >> mask)&1) << bit++;
+            }
+            matrix [y*dim+ x] = v;
+        }
+    }
+    return matrix;
+}
 
 /* Ordered dithering implementation */ 
 void dither_ordered (png_bytep *idat, 
                      png_structp png_ptr,
-                     png_infop info_ptr)
+                     png_infop info_ptr,
+                     size_t order)
 {
+    int *order_matrix = generate_order_matrix (order);
+    size_t dim = 1 << order;
     size_t x, y;
 
 /* Abort if not grayscale image data! ----------------------------------- */
@@ -311,7 +320,7 @@ void dither_ordered (png_bytep *idat,
 /* Perform dithering algorithm ------------------------------------------ */
     for (y = 0; y < height; y++)
         for (x = 0; x < width; x += dx)
-            idat[y][x] = 255*(idat[y][x] > ORDER_COEFF*order_matrix[(y%8)*8+(x%(8*dx))]);
+            idat[y][x] = 255*(idat[y][x] > (order_matrix[(y%dim)*dim+(x%(dim*dx))] << 8-2*order));
     /* ------------------------------------------------------------------ */
 }
 
@@ -345,7 +354,7 @@ int main (int argc,
        perror("fopen");
        exit(EXIT_FAILURE);
     } 
-    char *out_filename = ( (argc == 3) ? argv[2] : DEFAULT_OUTPUT_FILENAME );
+    char *out_filename = ( (argc >= 3) ? argv[2] : DEFAULT_OUTPUT_FILENAME );
     FILE *img_write;
     if (!(img_write = fopen(out_filename, "wb"))) {
        perror("fopen");
@@ -380,7 +389,7 @@ int main (int argc,
     if (opts['f']) {
         dither_floyd_steinberg (idat, in_pngp, in_infop);
     } else {
-        dither_ordered (idat, in_pngp, in_infop);
+        dither_ordered (idat, in_pngp, in_infop, 4);
     }
     /* -------------------------------------------------------------------*/
 

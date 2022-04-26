@@ -13,7 +13,6 @@
 
 #include "parse.h"  /* Options, parse_options() */
 
-
 /* SETUP/TEARDOWN FUNCTIONS
  *
  * {setup/teardown}_{read/write}
@@ -222,6 +221,8 @@ void commit_idat_to_png (png_bytep *idat,
  *
  * dither_floyd_steinberg 
  *     Dithers using an error diffusion algorithm 
+ * generate_threshold_matrix
+ *     Creates a threshold matrix of order N, used for dithered ordering
  * dither_ordered
  *     Dithers using a threshold matrix
  *******************************************************************************/
@@ -277,21 +278,20 @@ void dither_floyd_steinberg (png_bytep *idat,
     /* ------------------------------------------------------------------ */
 }
 
-
-int *generate_order_matrix (size_t order)
+int *generate_threshold_matrix (size_t N)
 {
-    size_t dim = 1 << order;
+    size_t dim = 1 << N;
     int *matrix = malloc (dim*dim*sizeof(*matrix));
 
     size_t x, y, bit;
     for (y = 0; y < dim; y++) {
         for (x = 0; x < dim; x++) {
-            unsigned char v = 0, mask = order-1, xc = x^y, yc = y;
-            for (bit = 0; bit < 2*order; mask--) {
+            unsigned char v = 0, mask = N-1, xc = x^y, yc = y;
+            for (bit = 0; bit < 2*N; mask--) {
                 v |= ((yc >> mask)&1) << bit++;
                 v |= ((xc >> mask)&1) << bit++;
             }
-            matrix [y*dim+ x] = v << ((4-order) << 1);
+            matrix [y*dim+ x] = v << ((4-N) << 1);
         }
     }
     return matrix;
@@ -303,7 +303,7 @@ void dither_ordered (png_bytep *idat,
                      png_infop info_ptr,
                      size_t order)
 {
-    int *order_matrix = generate_order_matrix (order);
+    int *threshold = generate_threshold_matrix (order);
     size_t dim = 1 << order;
     size_t x, y;
 
@@ -320,7 +320,7 @@ void dither_ordered (png_bytep *idat,
 /* Perform dithering algorithm ------------------------------------------ */
     for (y = 0; y < height; y++)
         for (x = 0; x < width; x += dx)
-            idat[y][x] = 255*(idat[y][x] > order_matrix[(y%dim)*dim+(x%(dim*dx))]);
+            idat[y][x] = 255*(idat[y][x] > threshold[(y%dim)*dim+(x%(dim*dx))]);
     /* ------------------------------------------------------------------ */
 }
 

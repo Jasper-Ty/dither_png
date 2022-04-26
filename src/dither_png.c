@@ -291,7 +291,7 @@ int *generate_order_matrix (size_t order)
                 v |= ((yc >> mask)&1) << bit++;
                 v |= ((xc >> mask)&1) << bit++;
             }
-            matrix [y*dim+ x] = v;
+            matrix [y*dim+ x] = v << ((4-order) << 1);
         }
     }
     return matrix;
@@ -320,7 +320,7 @@ void dither_ordered (png_bytep *idat,
 /* Perform dithering algorithm ------------------------------------------ */
     for (y = 0; y < height; y++)
         for (x = 0; x < width; x += dx)
-            idat[y][x] = 255*(idat[y][x] > (order_matrix[(y%dim)*dim+(x%(dim*dx))] << 8-2*order));
+            idat[y][x] = 255*(idat[y][x] > order_matrix[(y%dim)*dim+(x%(dim*dx))]);
     /* ------------------------------------------------------------------ */
 }
 

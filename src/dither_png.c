@@ -9,9 +9,17 @@
                        FILE*, fopen(), fclose(), fread() */
 #include <stdlib.h> /* malloc(), free(),
                        exit(), EXIT_SUCCESS, EXIT_FAILURE */
-#include <png.h>    /* png_* */
+#include <limits.h> /* SIZE_MAX */
+#include <spng.h>   /* spng_* */
 
 #include "parse.h"  /* Options, parse_options() */
+
+#define IMAGE_LIMIT_WIDTH 42069
+#define IMAGE_LIMIT_HEIGHT 42069
+
+#define CHUNK_SIZE_LIMIT 1024
+
+#define BUFSIZE
 
 /* SETUP/TEARDOWN FUNCTIONS
  *
@@ -21,201 +29,37 @@
  *******************************************************************************/
 
 void setup_read (FILE *fp,
-                 png_structp *png_ptr, 
-                 png_infop *info_ptr,
-                 png_infop *end_info)
+                 spng_ctx *ctx)
 {
-
-/* Check first 8 bytes to see if file is PNG ---------------------------- */
-    int SIG_BYTES = 8;
-    char header[SIG_BYTES];
-
-    fread(&header, 1, SIG_BYTES, fp);
-    if (png_sig_cmp(header, 0, SIG_BYTES)) 
-    {
-        fprintf(stderr, "Not a PNG\n");
-        exit(EXIT_FAILURE);
-    }
+/* Setup limits (to safely open untrusted files) ------------------------ */
+    spng_set_image_limits (ctx, IMAGE_LIMIT_WIDTH, IMAGE_LIMIT_HEIGHT);
+    spng_set_chunk_limits (ctx, CHUNK_SIZE_LIMIT, SIZE_MAX);
+    spng_set_crc_action (ctx, SPNG_CRC_USE, SPNG_CRC_USE);
     /* ------------------------------------------------------------------ */
 
-/* Create read, info, and end structs ----------------------------------- */ 
-    *png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!(*png_ptr)) {
-        fprintf(stderr, "png_create_read_struct() error\n");
-        exit(EXIT_FAILURE);
-    }
+    if (!(ctx = spng_ctx_new(0))) 
+        goto setup_read_err;
 
-    *info_ptr = png_create_info_struct(*png_ptr);
-    if (!(*info_ptr)) {
-        fprintf(stderr, "png_create_info_struct() error\n");
-        png_destroy_read_struct (png_ptr, NULL, NULL);
-        exit(EXIT_FAILURE);
-    }
 
-    *end_info = png_create_info_struct(*png_ptr);
-    if (!(*end_info)) {
-        fprintf(stderr, "png_create_info_struct() error\n");
-        png_destroy_read_struct (png_ptr, info_ptr, NULL);
-        exit(EXIT_FAILURE);
-    }
-    /* ------------------------------------------------------------------ */
 
-/* setjmp for error handling -------------------------------------------- */
-    if (setjmp(png_jmpbuf(*png_ptr))) {
-        png_destroy_read_struct (png_ptr, info_ptr, end_info);
-        fclose (fp);
-        exit(EXIT_FAILURE);
-    }
-    /* ------------------------------------------------------------------ */
-    
-/* Open PNG file and read PNG info -------------------------------------- */
-    png_init_io (*png_ptr, fp);
-    png_set_sig_bytes (*png_ptr, SIG_BYTES);
-
-    png_read_info (*png_ptr, *info_ptr);
-    /* ------------------------------------------------------------------ */
+setup_read_err:
+    spng_ctx_free (ctx);
+    exit (EXIT_FAILURE);
 }
 
-void teardown_read (FILE *fp,
-                    png_structp *png_ptr,
-                    png_infop *info_ptr,
-                    png_infop *end_info)
+void teardown_read (FILE *fp)
 {
-    png_read_end (*png_ptr, *end_info);
-    png_destroy_read_struct (png_ptr, info_ptr, end_info);
-    if (fclose(fp) == EOF) {
-        perror("fclose");
-        exit(EXIT_FAILURE);
-    }
+
 }
 
-void setup_write (FILE *fp,
-                  png_structp *png_ptr,
-                  png_infop *info_ptr)
+void setup_write (FILE *fp)
 {
-/* Create read and info structs ----------------------------------------- */
-    *png_ptr = png_create_write_struct (PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr) {
-        fprintf(stderr, "png_create_write_struct() error\n");
-        exit(EXIT_FAILURE);
-    }
-    *info_ptr = png_create_info_struct (*png_ptr);
-    if (!(*info_ptr)) {
-        fprintf(stderr, "png_create_info_struct() error\n");
-        png_destroy_write_struct (png_ptr, NULL);
-        exit(EXIT_FAILURE);
-    }
-    /* ------------------------------------------------------------------ */
-
-/* setjmp for error handling -------------------------------------------- */
-    if (setjmp(png_jmpbuf(*png_ptr))) {
-        png_destroy_write_struct (png_ptr, info_ptr);
-        fclose(fp);
-        exit(EXIT_FAILURE);
-    }
-    /* ------------------------------------------------------------------ */
-
-    png_init_io (*png_ptr, fp);
 }
 
-void teardown_write (FILE *fp,
-                     png_structp *png_ptr,
-                     png_infop *info_ptr)
+void teardown_write (FILE *fp)
 {
-    png_destroy_write_struct (png_ptr, info_ptr);
-    if (fclose(fp) == EOF) {
-        perror("fclose");
-        exit(EXIT_FAILURE);
-    }
 }
 
-
-/* PNG CONFIG FUNCTIONS 
- *
- * set_to_grayscale:
- *     Sets PNG to 8-bit grayscale
- * copy_IHDR:
- *     Copies IHDR data between two PNG files
- *******************************************************************************/
-
-void set_to_grayscale (png_structp png_ptr,
-                       png_infop info_ptr)
-{
-    png_byte color_type = png_get_color_type (png_ptr, info_ptr);
-    if (color_type == PNG_COLOR_TYPE_RGB || color_type == PNG_COLOR_TYPE_RGB_ALPHA)
-        png_set_rgb_to_gray_fixed (png_ptr, 1, -1, -1);
-    png_read_update_info (png_ptr, info_ptr);
-}
-
-void copy_IHDR (png_structp in_pngp, png_infop in_infop,
-                png_structp out_pngp, png_infop out_infop)
-{
-    png_uint_32 width, height;
-    int bit_depth, color_type;
-    int interlace_type, compression_type, filter_method;
-
-    png_get_IHDR (in_pngp, in_infop, 
-                  &width, &height, 
-                  &bit_depth, 
-                  &color_type, 
-                  &interlace_type, 
-                  &compression_type, 
-                  &filter_method); 
-    png_set_IHDR (out_pngp, out_infop,
-                  width, height,
-                  bit_depth,
-                  color_type,
-                  interlace_type,
-                  compression_type,
-                  filter_method);
-}
-
-/* IMAGE DATA FUNCTIONS
- *
- * load_idat
- *     Allocates and returns 2D byte array populated with PNG image data
- * free_idat
- *     Frees image data array allocated with load_idat
- * commit_idat_to_png
- *     Sets PNG image data and commits it to PNG file
- *******************************************************************************/
-
-png_bytep *load_idat (png_structp png_ptr,
-                      png_infop info_ptr)
-{
-/* Get dimensions for allocating  --------------------------------------- */
-    png_uint_32 height = png_get_image_height (png_ptr, info_ptr);
-    png_uint_32 rowbytes = png_get_rowbytes(png_ptr, info_ptr);
-    /* ------------------------------------------------------------------ */
-
-/* Allocate row pointers and rows --------------------------------------- */
-    png_bytep *idat = malloc (height * sizeof(*idat));
-    idat[0] = malloc (rowbytes*height * sizeof(**idat));
-
-    size_t idx;
-    for (idx = 0; idx < height; idx++) 
-        idat[idx] = idat[0] + idx*rowbytes;
-    /* ------------------------------------------------------------------ */
-
-/* Read in png, then done! ---------------------------------------------- */
-    png_read_image (png_ptr, idat);
-    return idat;
-    /* ------------------------------------------------------------------ */
-}
-
-void free_idat (png_bytep *idat)
-{
-    free (idat[0]);
-    free (idat);
-}
-
-void commit_idat_to_png (png_bytep *idat,
-                         png_structp png_ptr,
-                         png_infop info_ptr)
-{
-    png_set_rows (png_ptr, info_ptr, idat);
-    png_write_png (png_ptr, info_ptr, PNG_TRANSFORM_IDENTITY, NULL);
-}
 
 /* DITHERING FUNCTIONS
  *
@@ -363,43 +207,17 @@ int main (int argc,
     /* -------------------------------------------------------------------*/
 
 
-/* Initialize LibPNG structs ---------------------------------------------*/
-    png_structp in_pngp = NULL; 
-    png_infop in_infop = NULL;
-    png_infop in_endp = NULL;
-    setup_read (img_read, &in_pngp, &in_infop, &in_endp);
-
-    png_structp out_pngp = NULL;
-    png_infop out_infop = NULL;
-    setup_write (img_write, &out_pngp, &out_infop);
-
-    set_to_grayscale (in_pngp, in_infop);
-    copy_IHDR (in_pngp, in_infop, out_pngp, out_infop);
+/* Initialize LibSPNG ----------------------------------------------------*/
+    spng_ctx *ctx = spng_ctx_new(0);
+    char *buf = malloc (
     /* -------------------------------------------------------------------*/
 
 
 /* Load image data and perform dither ------------------------------------*/
-    png_bytep *idat = load_idat (in_pngp, in_infop);
-    if (!idat) {
-        fprintf (stderr, "Unable to read image data\n");
-        teardown_read (img_read, &in_pngp, &in_infop, &in_endp);
-        teardown_write (img_write, &out_pngp, &out_infop);
-        exit(EXIT_FAILURE);
-    }
-    if (opts['f']) {
-        dither_floyd_steinberg (idat, in_pngp, in_infop);
-    } else {
-        dither_ordered (idat, in_pngp, in_infop, 4);
-    }
     /* -------------------------------------------------------------------*/
 
 
 /* Finalize: save PNG and free structs -----------------------------------*/
-    commit_idat_to_png (idat, out_pngp, out_infop);
-
-    free_idat(idat);
-    teardown_read (img_read, &in_pngp, &in_infop, &in_endp);
-    teardown_write (img_write, &out_pngp, &out_infop);
     /* -------------------------------------------------------------------*/
 
 
